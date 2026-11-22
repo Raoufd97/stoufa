@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Import des données</title>
+<style>
+:root{--bg:#EEF1EE;--surface:#fff;--ink:#18211E;--muted:#5B6964;--line:#D3DBD7;--accent:#17624F;--accent-ink:#fff;--bad:#B3261E}
+@media (prefers-color-scheme:dark){:root{--bg:#0F1513;--surface:#18201D;--ink:#E6EDE9;--muted:#97A7A1;--line:#2B3632;--accent:#4DBE9A;--accent-ink:#06201A;--bad:#FF8B80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:560px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:14px}
+h1{margin:0;font-size:26px}p{margin:0;color:var(--muted)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+label.btn,button{height:48px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden}
+label.btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+progress{width:100%;height:10px}#log{white-space:pre-wrap;font-size:14px;color:var(--ink)}.err{color:var(--bad)}a{color:var(--accent);font-weight:600}
+</style></head><body>
+<main>
+  <h1>Import des données</h1>
+  <p>Choisis le fichier <b>Stoufa-sauvegarde-….zip</b> téléchargé depuis l'appli Claude (onglet Bilan → Sauvegarde complète). À faire une seule fois.</p>
+  <div class="box">
+    <label class="btn">Choisir le fichier .zip<input type="file" id="f" accept=".zip,application/zip"></label>
+    <progress id="pg" value="0" max="1" hidden></progress>
+    <div id="log"></div>
+  </div>
+  <a href="./">← Retour à l'appli</a>
+</main>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="supabase-adapter.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const COLS=['produits','mouvements','appros','courses','tresorerie'];
+const log=(t,err)=>{const d=document.createElement('div');d.textContent=t;if(err)d.className='err';document.getElementById('log').append(d)};
+const pg=document.getElementById('pg');
+window.claude.use('db');  // demande le code d'accès tout de suite
+document.getElementById('f').addEventListener('change',async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  document.getElementById('log').textContent='';
+  try{
+    await window.claude.use('db');
+    const sb=window.stoufaSupabase, bucket=(window.STOUFA_CONFIG.bucket||'photos');
+    log('Lecture du fichier…');
+    const zip=await JSZip.loadAsync(file);
+    const rows=[], photos=[];
+    zip.forEach((path,entry)=>{
+      if(entry.dir) return;
+      const m=path.match(/(?:^|\/)data\/([^/]+)\/([^/]+)\.json$/);
+      if(m&&COLS.includes(m[1])) rows.push({col:m[1],id:m[2],entry});
+      const p=path.match(/(?:^|\/)photos\/([0-9a-f]{32})\.(jpe?g|png|webp)$/i);
+      if(p) photos.push({id:p[1],ext:p[2].toLowerCase(),entry});
+    });
+    if(!rows.length){log("Ce fichier ne contient pas de sauvegarde de la boutique.",true);return}
+    pg.hidden=false; pg.max=rows.length+photos.length; pg.value=0;
+    // 1) Fiches
+    const data=[];
+    for(const r of rows) data.push({col:r.col,id:r.id,data:JSON.parse(await r.entry.async('string'))});
+    for(let i=0;i<data.length;i+=200){
+      const {error}=await sb.from('docs').upsert(data.slice(i,i+200));
+      if(error) throw new Error('Fiches : '+error.message);
+      pg.value+=Math.min(200,data.length-i);
+    }
+    const parCol=COLS.map(c=>`${c} : ${data.filter(d=>d.col===c).length}`).join(' · ');
+    log(`✓ ${data.length} fiches importées (${parCol})`);
+    // 2) Photos, 4 à la fois
+    let ok=0, ko=0;
+    for(let i=0;i<photos.length;i+=4){
+      await Promise.all(photos.slice(i,i+4).map(async ph=>{
+        const type=ph.ext==='png'?'image/png':ph.ext==='webp'?'image/webp':'image/jpeg';
+        const blob=new Blob([await ph.entry.async('uint8array')],{type});
+        const {error}=await sb.storage.from(bucket).upload(ph.id,blob,{contentType:type,upsert:true,cacheControl:'31536000'});
+        if(error){ko++;console.error(ph.id,error.message)}else ok++;
+        pg.value++;
+      }));
+    }
+    log(`✓ ${ok} photos importées`+(ko?` (${ko} en erreur, relance l'import pour réessayer)`:''),ko>0);
+    log('Terminé. Tu peux retourner à l\'appli.');
+  }catch(err){log('Erreur : '+(err.message||err),true)}
+});
+</script>
+</body></html>

@@ -1,0 +1,4 @@
+# Les données de la boutique ne vont jamais sur GitHub (dépôt public)
+migration/
+node_modules/
+.DS_Store

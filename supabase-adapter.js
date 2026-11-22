@@ -199,5 +199,6 @@
       return services[name];
     }
   };
+  window.stoufaSupabase = sb;
   window.stoufaLogout = async () => { await sb.auth.signOut(); location.reload(); };
 })();

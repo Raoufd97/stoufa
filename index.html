@@ -83,7 +83,7 @@ main{padding-block:14px 120px}
 .fab{position:fixed;right:max(16px,calc(env(safe-area-inset-right,0px) + 16px));bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:6;height:52px;padding:0 20px;border-radius:26px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;box-shadow:0 6px 18px rgba(0,0,0,.18);display:flex;align-items:center;gap:6px}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-nav.tabs .wrap{display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
 .citem{display:grid;grid-template-columns:auto 44px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
 .citem:first-child{border-top:0}
 .citem .info{min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
@@ -159,7 +159,10 @@ nav.tabs svg{width:22px;height:22px}
 .iconbtn:disabled{opacity:.35}
 .bars{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 12px 10px}
 .bars .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;align-items:end;height:120px;border-bottom:1px solid var(--line)}
-.bar{position:relative;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.bar{position:relative;display:flex;flex-direction:column;justify-content:flex-end;height:100%;border:0;background:none;padding:0;cursor:pointer;min-width:0}
+.bar .bv{font-size:12px;font-weight:600;text-align:center;color:var(--ink);margin-bottom:3px;white-space:nowrap}
+.bar.sel .bv{color:var(--accent)}
+.bars .labels .mgv{display:block;color:var(--accent);font-weight:700;min-height:16px}
 .bar .ca{background:var(--accent-soft);border-radius:4px 4px 0 0;position:relative;min-height:2px}
 .bar .mg{position:absolute;left:0;right:0;bottom:0;background:var(--accent);border-radius:0}
 .bar.sel .ca{outline:2px solid var(--accent);outline-offset:1px}
@@ -290,8 +293,6 @@ button.kpi{width:100%;text-align:left;cursor:pointer}
   <div class="wrap">
     <button type="button" data-tab="stock" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>Stock</button>
-    <button type="button" data-tab="vente">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Vente</button>
     <button type="button" data-tab="courses">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11l2-8H6"/></svg>Appro</button>
     <button type="button" data-tab="comptage">
@@ -311,14 +312,14 @@ button.kpi{width:100%;text-align:left;cursor:pointer}
 <div id="toast" class="toast" hidden></div>
 
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="supabase-adapter.js"></script>
 <script>
 (function(){
 const $=s=>document.querySelector(s);
 const view=$('#view');
-let db=null, assets=null, downloads=null, produits=[], mouvements=[], courses=[], appros=[], loaded=false;
-let tab='stock', filtre='tout', sousFiltre='', q='', moisSel=null, lastResult=null, approDate=todayKey(), apSheet=null;
+let db=null, assets=null, downloads=null, produits=[], mouvements=[], courses=[], appros=[], treso=[], loaded=false;
+let detId=null, venteOpen=false, tab='stock', filtre='tout', sousFiltre='', cSearch='', q='', moisSel=null, lastResult=null, approDate=todayKey(), apSheet=null;
 let counts={};
 try{counts=JSON.parse(localStorage.getItem('comptage')||'{}')||{}}catch(e){counts={}}
 const saveCounts=()=>{try{localStorage.setItem('comptage',JSON.stringify(counts))}catch(e){}};
@@ -326,6 +327,7 @@ const saveCounts=()=>{try{localStorage.setItem('comptage',JSON.stringify(counts)
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 const nf=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:3,maximumFractionDigits:3});
+const nfi=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0});
 /* Tous les prix sont stockés et saisis en millimes (10500 = 10,500 DT) */
 const dt=n=>nf.format((n||0)/1000)+' DT';
 const num=v=>{const n=parseFloat(String(v??'').replace(',','.'));return isNaN(n)?0:n};
@@ -435,7 +437,7 @@ function renderChips(){
 function render(){
   $('#searchbox').hidden = tab!=='stock';
   $('#fab').hidden = tab!=='stock' || !db;
-  if(!db){view.innerHTML=`<div class="empty"><h2>Appli hors ligne</h2><p>Ouvre cette page depuis ton compte Claude pour accéder au stock enregistré.</p></div>`;return}
+  if(!db){view.innerHTML=`<div class="empty"><h2>Appli hors ligne</h2><p>Vérifie ta connexion internet puis recharge la page.</p></div>`;return}
   if(!loaded){view.innerHTML=`<div class="empty"><p>Chargement du stock…</p></div>`;return}
   try{
     if(tab==='stock') renderStock(); else if(tab==='vente') renderVente(); else if(tab==='courses') renderCourses(); else if(tab==='comptage') renderComptage(); else renderBilan();
@@ -480,7 +482,13 @@ function bindEx(){const b=$('#delEx'); if(!b) return; b.onclick=async()=>{b.disa
 
 /* ---------- Feuille ---------- */
 /* Pas de blocage du défilement de la page : sur téléphone, ça peut rester coincé après fermeture */
-function openSheet(html){apSheet=null;blurActive();const s=$('#sheet');$('#panel').innerHTML=html;s.hidden=false;$('#panel').scrollTop=0;const c=$('#panel .close');if(c)c.onclick=closeSheet}
+function openSheet(html){apSheet=null;detId=null;blurActive();const s=$('#sheet');$('#panel').innerHTML=html;s.hidden=false;$('#panel').scrollTop=0;const c=$('#panel .close');if(c)c.onclick=closeSheet}
+/* Fiche ouverte : le stock affiché suit les changements (vente, réappro…) sans fermer la fiche */
+function refreshDetail(){
+  if(!detId||$('#sheet').hidden) return;
+  const p=produits.find(x=>x.id===detId), el=$('#dqty'); if(!p||!el) return;
+  const [c,l]=etat(p); el.className='qty '+c; el.textContent=l;
+}
 function closeSheet(){apSheet=null;blurActive();$('#sheet').hidden=true;unstick()}
 function blurActive(){const a=document.activeElement;if(a&&a!==document.body&&a.blur)a.blur()}
 /* Remet la page d'aplomb : rien ne doit rester par-dessus, et le défilement doit marcher */
@@ -511,7 +519,7 @@ function openDetail(id,opt={}){
   const marge=known(p.prixVente)&&known(cout(p))?p.prixVente-cout(p):null;
   openSheet(`<div class="panel-h"><h2>${esc(p.nom)}</h2><button class="close" type="button" aria-label="Fermer">×</button></div>
     ${pic(p)?`<img class="bigphoto" src="${esc(pic(p))}" alt="Photo de ${esc(p.nom)}">`:''}
-    <div class="meta" style="font-size:15px">${locTag(p)}<span>${esc(catLabel(p))}</span><span class="qty ${c}">${esc(l)}</span></div>
+    <div class="meta" style="font-size:15px">${locTag(p)}<span>${esc(catLabel(p))}</span><span class="qty ${c}" id="dqty">${esc(l)}</span></div>
     ${locSrc(p)?`<div class="field"><span class="flabel">Où la trouver</span><button type="button" class="zoom" id="lzoom" aria-label="Agrandir la photo d'emplacement"><img class="bigphoto" src="${esc(locSrc(p))}" alt="Emplacement de ${esc(p.nom)}"></button></div>`:`<p class="hint">Pas de photo d'emplacement. Ajoute-la avec « Modifier ».</p>`}
     <div class="facts"><div class="fact"><span>Vente</span><b class="num">${pf(p.prixVente)}</b></div><div class="fact"><span>Achat</span><b class="num">${pf(p.prixAchat)}</b></div><div class="fact"><span>Marge</span><b class="num">${pf(marge)}</b></div></div>
     ${known(p.coutNet)&&p.coutNet!==p.prixAchat?`<p class="hint">Coût réel après remise du dernier appro : <b>${pf(p.coutNet)} DT</b> (la marge est calculée dessus).</p>`:''}
@@ -535,6 +543,7 @@ function openDetail(id,opt={}){
     <button class="btn block" type="button" id="arr">${p.arrete?'Remettre comme disponible':"Marquer « n'existe plus chez le fournisseur »"}</button>
     <button class="btn danger block" type="button" id="del">Supprimer</button>
     <div id="confirm"></div>`);
+  detId=p.id;
   $('#edit').onclick=()=>openForm(p.id);
   $('#arr').onclick=async()=>{const b=$('#arr');b.disabled=true;
     try{ if(p.arrete){await db.doc('produits/'+p.id).update({arrete:false,arreteNote:'',arreteLe:null});toast('Pièce remise comme disponible')}
@@ -549,7 +558,8 @@ function openDetail(id,opt={}){
   const z=$('#lzoom'); if(z) z.onclick=()=>{$('#lbimg').src=locSrc(p);$('#lightbox').hidden=false};
   const dvUpd=()=>{const q=Math.max(1,int($('#dvqte').value)||1),pr=pn($('#dvprix').value);
     $('#dvok').textContent='Enregistrer la vente'+(pr!==null?' · '+dt(pr*q):'');
-    $('#dvwarn').innerHTML=q>(p.stock||0)?`<div class="warnbox">Le stock indique ${p.stock||0}. La vente sera enregistrée et le stock passera à 0.</div>`:(pr===null?`<div class="warnbox">Sans prix, la vente ne compte pas dans le chiffre d'affaires.</div>`:'')};
+    const cs=(produits.find(x=>x.id===p.id)||p).stock||0;
+    $('#dvwarn').innerHTML=q>cs?`<div class="warnbox">Le stock indique ${cs}. La vente sera enregistrée et le stock passera à 0.</div>`:(pr===null?`<div class="warnbox">Sans prix, la vente ne compte pas dans le chiffre d'affaires.</div>`:'')};
   $('#dvprix').addEventListener('input',dvUpd);
   $('#dvqte').addEventListener('input',()=>{const i=$('#dvqte');i.value=i.value.replace(/[^\d]/g,'');dvUpd()});
   $('#dvminus').onclick=()=>{$('#dvqte').value=Math.max(1,(int($('#dvqte').value)||1)-1);dvUpd()};
@@ -564,7 +574,7 @@ function openDetail(id,opt={}){
     try{
       await db.collection('mouvements').add({type:'vente',source:'manuelle',produitId:cur.id,nom:cur.nom,qte:q,prixVente:pr,prixAchat:cout(cur),date:new Date().toISOString(),stockAvant:cur.stock||0});
       await db.doc('produits/'+cur.id).update({stock:Math.max(0,(cur.stock||0)-q)});
-      toast('Vente enregistrée : '+q+' × '+cur.nom+(pr!==null?' · '+dt(pr*q):''));
+      toast('Vente enregistrée : '+q+' × '+cur.nom+(pr!==null?' · '+dt(pr*q):'')+' · reste '+Math.max(0,(cur.stock||0)-q));
       const ls=liesDe(cur);
       if(ls.length){$('#vendu').innerHTML=`<div class="flabel">Vente enregistrée</div><div>${esc(q+' × '+cur.nom)}</div><div class="flabel">Vendu aussi ?</div><div class="lies">${ls.map(lieChip).join('')}</div><button class="btn" type="button" id="dvfin">Non, terminé</button>`;
         $('#vendu').querySelectorAll('[data-lie]').forEach(x=>x.onclick=()=>openDetail(x.dataset.lie));$('#dvfin').onclick=closeSheet;$('#vendu').scrollIntoView({block:'nearest'});}
@@ -815,12 +825,13 @@ function renderComptage(){
       <button class="btn" type="button" id="rclose">Fermer</button></div>`;
   }
   if(!produits.length){view.innerHTML=html+`<div class="empty"><h2>Rien à compter</h2><p>Ajoute d'abord tes pièces dans l'onglet Stock.</p></div>`;bindR();return}
-  html+=`<p class="hint">Compte ce qu'il reste sur chaque emplacement et tape le nombre. Laisse vide ce que tu ne comptes pas. L'appli déduit ce qui a été vendu, en tenant compte des réappros et des ventes déjà notées dans l'onglet Vente.</p>`;
+  html+=`<p class="hint">Compte ce qu'il reste sur chaque emplacement et tape le nombre. Laisse vide ce que tu ne comptes pas. L'appli déduit ce qui a été vendu, en tenant compte des réappros et des ventes déjà notées depuis la fiche des pièces.</p>`;
   const list=[...produits].sort((a,b)=>(a.emplacement||'~').localeCompare(b.emplacement||'~',undefined,{numeric:true})||norm(a.nom).localeCompare(norm(b.nom)));
   let curEmp=null, rows='';
-  html+=`<div class="list">`+list.map(p=>{
+  html+=`<div class="search" style="margin:0"><input id="cqs" type="search" placeholder="Chercher une pièce à compter…" autocomplete="off" value="${esc(cSearch)}" aria-label="Chercher une pièce à compter"></div><p class="hint" id="cqn" hidden></p>`;
+  html+=`<div class="list" id="clistc">`+list.map(p=>{
     const v=counts[p.id]??'';
-    return `<div class="crow">${thumb(p,'sm')}<div class="info"><div class="nom" style="font-weight:600;overflow-wrap:anywhere">${esc(p.nom)}</div>
+    return `<div class="crow" data-row="${esc(p.id)}">${thumb(p,'sm')}<div class="info"><div class="nom" style="font-weight:600;overflow-wrap:anywhere">${esc(p.nom)}</div>
       <div class="meta">${locTag(p)}<span class="num">Prévu : ${p.stock||0}</span><span class="diff" id="d-${esc(p.id)}">${diffText(p,v)}</span></div></div>
       <input type="text" inputmode="numeric" id="c-${esc(p.id)}" data-id="${esc(p.id)}" value="${esc(v)}" placeholder="–" aria-label="Quantité comptée pour ${esc(p.nom)}"></div>`}).join('')+`</div>`;
   html+=`<div style="height:70px"></div><div class="stickybar"><div class="wrap"><button class="btn primary block" type="button" id="csave"></button></div></div>`;
@@ -832,6 +843,13 @@ function renderComptage(){
     updSave();
   }));
   $('#csave').onclick=saveComptage; updSave();
+  /* Recherche : masque les lignes sans les effacer, les quantités déjà tapées restent */
+  const filt=()=>{const box=$('#clistc'),info=$('#cqn');if(!box)return;
+    if(!cSearch.trim()){box.querySelectorAll('.crow').forEach(r=>r.hidden=false);info.hidden=true;return}
+    const r=cherche(produits,cSearch,txtP), ok=new Set(r.items.map(p=>p.id));
+    box.querySelectorAll('.crow').forEach(row=>row.hidden=!ok.has(row.dataset.row));
+    info.hidden=false;info.textContent=ok.size?(ok.size+' pièce'+(ok.size>1?'s':'')+(r.exact?'':' proches')+'. Les quantités déjà tapées pour les autres pièces sont gardées.'):'Aucune pièce ne correspond.'};
+  $('#cqs').addEventListener('input',e=>{cSearch=e.target.value;filt()}); filt();
 }
 function bindR(){const b=$('#rclose'); if(b) b.onclick=()=>{lastResult=null;render()}}
 function diffText(p,v){const n=int(v);if(n===null)return '';const d=(p.stock||0)-n;if(d>0)return '→ '+d+' vendu'+(d>1?'s':'');if(d<0)return '→ '+(-d)+' en plus';return '→ rien de vendu'}
@@ -1031,9 +1049,20 @@ function coursesRefresh(){
     .sort((x,y)=>norm(x.nom).localeCompare(norm(y.nom)))
     .map(p=>({id:'auto:'+p.id,produitId:p.id,texte:p.nom,qte:1,auto:true}));
   const low=produits.filter(p=>!p.arrete&&(p.stock||0)>0&&(p.stock||0)<=(p.seuil||0)&&!live.some(c=>!c.fait&&c.produitId===p.id));
-  a.innerHTML=low.length?`<div class="banner"><span>${low.length} pièce${low.length>1?'s':''} presque épuisée${low.length>1?'s':''} (sous le seuil d'alerte) ${low.length>1?'ne sont':"n'est"} pas sur la liste.</span><button type="button" id="cautob">Les ajouter</button></div>`:'';
-  if(low.length) $('#cautob').onclick=async e=>{const b=e.currentTarget;b.disabled=true;
-    try{for(const p of low){await addCourse({texte:p.nom,produitId:p.id,qte:Math.max(1,(p.seuil||0)-(p.stock||0)+1)})}toast(low.length+' pièce'+(low.length>1?'s':'')+' ajoutée'+(low.length>1?'s':''))}
+  /* Pièces sous le seuil d'alerte pas encore sur la liste : on les montre une par une */
+  low.sort((x,y)=>(x.stock||0)-(y.stock||0)||norm(x.nom).localeCompare(norm(y.nom)));
+  const lowQ=p=>Math.max(1,(p.seuil||0)-(p.stock||0)+1);
+  a.innerHTML=low.length?`<div class="box" style="background:var(--accent-soft);border-color:transparent"><div class="flabel" style="color:var(--accent)">Presque épuisée${low.length>1?'s':''} · pas sur la liste (${low.length})</div>
+      <p class="hint">Stock égal ou sous le seuil d'alerte. Ajoute celles à racheter.</p>
+      <div class="list">${low.map(p=>`<div class="lrow"><div class="aline"><button type="button" class="tlink" data-pd="${esc(p.id)}" aria-label="Voir la fiche de ${esc(p.nom)}">${thumb(p,'sm')}</button><div style="min-width:0"><button type="button" class="nlink" data-pd="${esc(p.id)}">${esc(p.nom)}</button>
+        <div class="meta"><span class="qty low">${p.stock||0} en stock</span><span>alerte ≤ ${p.seuil||0}</span></div></div></div>
+        <button class="btn slim" type="button" data-lowadd="${esc(p.id)}">+ Ajouter</button></div>`).join('')}</div>
+      ${low.length>1?`<button class="btn block" type="button" id="cautob">Tout ajouter (${low.length})</button>`:''}</div>`:'';
+  a.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>openDetail(b.dataset.pd));
+  a.querySelectorAll('[data-lowadd]').forEach(b=>b.onclick=async()=>{const p=produits.find(x=>x.id===b.dataset.lowadd);if(!p)return;b.disabled=true;
+    try{await addCourse({texte:p.nom,produitId:p.id,qte:lowQ(p)});toast(p.nom+" ajoutée à l'appro")}catch(x){toast('Ajout impossible, réessaie.');b.disabled=false}});
+  const cb=$('#cautob'); if(cb) cb.onclick=async e=>{const b=e.currentTarget;b.disabled=true;
+    try{for(const p of low){await addCourse({texte:p.nom,produitId:p.id,qte:lowQ(p)})}toast(low.length+' pièces ajoutées')}
     catch(x){toast('Ajout impossible, réessaie.');b.disabled=false}};
   if(!live.length&&!auto.length){l.innerHTML=`<div class="empty"><p>Liste vide. Les pièces épuisées s'ajoutent toutes seules ici. Ajoute aussi ce que tu veux acheter au prochain appro.</p></div>`;return}
   const aPay=live.filter(c=>c.aPayer);
@@ -1339,18 +1368,23 @@ function renderBilan(){
   const top=Object.values(agg).sort((a,b)=>(b.mg??-1e9)-(a.mg??-1e9));
   const rach=produits.filter(p=>(p.stock||0)<=(p.seuil||0)).sort((a,b)=>(a.stock||0)-(b.stock||0));
 
-  view.innerHTML=`<div class="monthsel"><button class="iconbtn" type="button" id="mprev" aria-label="Mois précédent" ${idx<=0?'disabled':''}>‹</button><h2>${esc(moisLabel(moisSel))}</h2><button class="iconbtn" type="button" id="mnext" aria-label="Mois suivant" ${idx>=sorted.length-1?'disabled':''}>›</button></div>
+  view.innerHTML=`${tresoHTML()}<div class="monthsel"><button class="iconbtn" type="button" id="mprev" aria-label="Mois précédent" ${idx<=0?'disabled':''}>‹</button><h2>${esc(moisLabel(moisSel))}</h2><button class="iconbtn" type="button" id="mnext" aria-label="Mois suivant" ${idx>=sorted.length-1?'disabled':''}>›</button></div>
     <div class="kpis"><div class="kpi hero"><span>Marge du mois</span><b class="num">${dt(s.mg)}</b></div>
       <div class="kpi"><span>Chiffre d'affaires</span><b class="num">${dt(s.ca)}</b></div><div class="kpi"><span>Pièces vendues</span><b class="num">${s.pc}</b></div>
       <button type="button" class="kpi" id="kach"><span>Achats fournisseur</span><b class="num">${dt(s.ach)}</b><small>Voir les appros ›</small></button><div class="kpi"><span>Marge moyenne</span><b class="num">${s.caM?Math.round(s.mg/s.caM*100)+' %':'–'}</b></div></div>
     <p class="hint">Les ventes sont datées du jour du comptage, pas du jour réel de la vente.${s.inc?` ${s.inc} pièce${s.inc>1?'s':''} vendue${s.inc>1?'s':''} sans prix complet : pas comptée${s.inc>1?'s':''} dans la marge.`:''}</p>
-    <div class="bars" role="img" aria-label="Chiffre d'affaires et marge sur six mois"><div class="grid">${st6.map(x=>`<div class="bar ${x.k===moisSel?'sel':''}"><div class="ca" style="height:${(x.ca/max*100).toFixed(1)}%"><div class="mg" style="height:${x.ca?Math.max(0,x.mg/x.ca*100).toFixed(1):0}%"></div></div></div>`).join('')}</div>
-      <div class="labels">${st6.map(x=>`<span>${esc(moisLabel(x.k,{month:'short'}))}</span>`).join('')}</div>
-      <div class="legend"><span><i style="background:var(--accent-soft)"></i>Chiffre d'affaires</span><span><i style="background:var(--accent)"></i>Marge</span></div></div>
+    <div class="bars"><div class="grid">${st6.map(x=>`<button type="button" class="bar ${x.k===moisSel?'sel':''}" data-mk="${x.k}" aria-label="${esc(moisLabel(x.k))} : chiffre d'affaires ${dt(x.ca)}, marge ${dt(x.mg)}"><span class="bv num">${x.ca?nfi.format(Math.round(x.ca/1000)):'–'}</span><div class="ca" style="height:${(x.ca/max*80).toFixed(1)}%"><div class="mg" style="height:${x.ca?Math.max(0,x.mg/x.ca*100).toFixed(1):0}%"></div></div></button>`).join('')}</div>
+      <div class="labels">${st6.map(x=>`<span>${esc(moisLabel(x.k,{month:'short'}))}<b class="mgv num">${x.mg?nfi.format(Math.round(x.mg/1000)):''}</b></span>`).join('')}</div>
+      <div class="legend"><span><i style="background:var(--accent-soft)"></i>Chiffre d'affaires (en haut)</span><span><i style="background:var(--accent)"></i>Marge (sous le mois)</span></div>
+      <p class="hint" style="margin-top:6px">En dinars, arrondi. Touche un mois pour voir son détail.</p></div>
     <h3 class="section-h">Ventes du mois</h3>
     ${top.length?`<div class="list">${top.map(a=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(a.nom)}</div><div class="meta num">${a.q} vendu${a.q>1?'s':''} · ${a.ca===null?'prix de vente ?':dt(a.ca)}</div></div>${a.mg===null?`<div class="noprice">Marge ?</div>`:`<div class="prix num">+${pf(a.mg)}</div>`}</div>`).join('')}</div>`:`<div class="empty"><p>Pas encore de ventes ce mois-ci. Elles apparaissent après un comptage.</p></div>`}
-    <h3 class="section-h">À racheter</h3>
-    ${rach.length?`<div class="list">${rach.map(p=>{const [c,l]=etat(p);return `<button class="item" type="button" data-id="${esc(p.id)}">${thumb(p)}<div class="info"><div class="nom">${esc(p.nom)}</div><div class="meta">${locTag(p)}<span>alerte ≤ ${p.seuil||0}</span></div></div><div class="right"><div class="qty ${c}">${esc(l)}</div></div></button>`}).join('')}</div>`:`<div class="empty"><p>Tout est au-dessus du seuil d'alerte.</p></div>`}
+    ${(()=>{const vm=mouvements.filter(m=>m.type==='vente'&&moisKey(m.date)===moisSel).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      return vm.length?`<details class="prixbox" id="vdet" ${venteOpen?'open':''}><summary><span>Détail des ventes (${vm.length}) <span class="muted" style="font-weight:500">· annuler une vente</span></span></summary>
+      ${vm.map(m=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(m.nom||'Pièce')}</div>
+        <div class="meta num">${esc(new Date(m.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} · ${m.qte} × ${known(m.prixVente)?pf(m.prixVente):'prix ?'}${known(m.prixVente)?' = '+dt(m.qte*m.prixVente):''} · ${m.source==='manuelle'?'notée':'comptage'}</div></div>
+        <button class="undo" type="button" data-vundo="${esc(m.id)}">Annuler</button></div>`).join('')}
+      <p class="hint" style="padding:0 12px 12px">« Annuler » retire la vente du bilan. Pour une vente notée, la quantité revient dans le stock. Pour une vente trouvée au comptage, le stock compté ne change pas.</p></details>`:''})()}
     <h3 class="section-h">Stock actuel</h3>
     <div class="kpis"><div class="kpi"><span>Valeur au prix d'achat</span><b class="num">${dt(valAchat)}</b></div><div class="kpi"><span>Si tout est vendu</span><b class="num">${dt(valVente)}</b></div></div>
     ${nSansPrix?`<p class="hint">${nSansPrix} pièce${nSansPrix>1?'s':''} sans prix complet ne ${nSansPrix>1?'sont':'est'} pas comptée${nSansPrix>1?'s':''} dans ces totaux. Filtre « Prix manquant » dans l'onglet Stock pour les compléter.</p>`:''}
@@ -1358,10 +1392,58 @@ function renderBilan(){
     <div class="box"><p class="hint">Télécharge tout dans un fichier Excel : stock, ventes et achats, bilan par mois, liste d'appro. Garde une copie de temps en temps.</p>
       <button class="btn block" type="button" id="xport">Exporter en Excel</button></div>`:''}`;
   $('#mprev').onclick=()=>{if(idx>0){moisSel=sorted[idx-1];render()}};
+  view.querySelectorAll('[data-mk]').forEach(b=>b.onclick=()=>{moisSel=b.dataset.mk;render()});
+  const vd=$('#vdet'); if(vd) vd.addEventListener('toggle',()=>{venteOpen=vd.open});
+  view.querySelectorAll('[data-vundo]').forEach(b=>b.onclick=async()=>{
+    if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Confirmer ?';setTimeout(()=>{if(b.isConnected){b.classList.remove('armed');b.textContent='Annuler'}},3500);return}
+    const m=mouvements.find(x=>x.id===b.dataset.vundo); if(!m) return; b.disabled=true;
+    try{await db.doc('mouvements/'+m.id).delete();
+      const p=produits.find(x=>x.id===m.produitId);
+      if(p&&m.source==='manuelle') await db.doc('produits/'+p.id).update({stock:(p.stock||0)+(m.qte||0)});
+      toast('Vente annulée'+(p&&m.source==='manuelle'?' · '+m.qte+' remis en stock':''))}
+    catch(e){toast('Annulation impossible, réessaie.');b.disabled=false}});
   $('#mnext').onclick=()=>{if(idx<sorted.length-1){moisSel=sorted[idx+1];render()}};
   const xb=$('#xport'); if(xb) xb.onclick=()=>exportExcel(xb);
   $('#kach').onclick=()=>{document.querySelector('nav.tabs [data-tab="courses"]').click();setTimeout(()=>{const h=$('#chist');if(h)h.scrollIntoView({block:'center'})},80)};
   view.querySelectorAll('.item').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
+  bindTreso();
+}
+
+/* ---------- Trésorerie : relevés de caisse ---------- */
+function tresoHTML(){
+  const l=[...treso].sort((a,b)=>String(b.date).localeCompare(String(a.date))), last=l[0];
+  let est='';
+  if(last){
+    // depuis le dernier relevé : ventes notées (+) et appros payés après remise (−)
+    let plus=0,moins=0;
+    const totJour={}; mouvements.forEach(m=>{if(m.type==='achat'&&known(m.prixAchat)){const k=dayKey(m.date);totJour[k]=(totJour[k]||0)+m.qte*m.prixAchat}});
+    mouvements.forEach(m=>{if(String(m.date)<=String(last.date))return;
+      if(m.type==='vente'&&known(m.prixVente)) plus+=m.qte*m.prixVente;
+      if(m.type==='achat'&&known(m.prixAchat)){const k=dayKey(m.date),t=totJour[k]||0;moins+=m.qte*m.prixAchat*(t?1-remiseDu(k)/t:1)}});
+    moins=Math.round(moins);
+    est=`<div class="kpis"><div class="kpi hero"><span>En caisse au ${esc(new Date(last.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}))}</span><b class="num">${dt(last.montant)}</b></div>
+      <div class="kpi"><span>Ventes notées depuis</span><b class="num">+ ${dt(plus)}</b></div><div class="kpi"><span>Appros payés depuis</span><b class="num">− ${dt(moins)}</b></div>
+      <div class="kpi" style="grid-column:1/-1"><span>Estimation aujourd'hui</span><b class="num">${dt(last.montant+plus-moins)}</b></div></div>
+      <p class="hint">Estimation faite seulement avec ce qui est noté dans l'appli. Les ventes trouvées au comptage comptent le jour du comptage, et les autres dépenses (loyer, électricité…) ne sont pas prises en compte.${last.note?` Note du dernier relevé : « ${esc(last.note)} ».`:''}</p>`;
+  }
+  return `<h2 class="section-h" style="margin:0">Trésorerie</h2>
+    <div class="box">${est||'<p class="hint">Note ici ce que tu as en caisse. L\'appli estimera ensuite la caisse à partir des ventes et des appros notés.</p>'}
+      <div class="row2"><div class="field"><label for="tmont">Montant en caisse (DT)</label><input id="tmont" inputmode="decimal" placeholder="ex. 350 ou 350,500"><span class="mmhint" id="tmonth"></span></div>
+        <div class="field"><label for="tnote">Note (facultatif)</label><input id="tnote" placeholder="ex. caisse + poche"></div></div>
+      <button class="btn primary" type="button" id="tok">Enregistrer la caisse d'aujourd'hui</button>
+      ${l.length?`<details><summary class="hint" style="cursor:pointer">Relevés précédents (${l.length})</summary><div class="list" style="margin-top:8px">${l.map(t=>`<div class="lrow"><div class="info"><div class="num" style="font-weight:600">${dt(t.montant)}</div><div class="meta">${esc(new Date(t.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}))}${t.note?' · '+esc(t.note):''}</div></div><button class="undo" type="button" data-tdel="${esc(t.id)}">Supprimer</button></div>`).join('')}</div></details>`:''}</div>`;
+}
+function bindTreso(){
+  const i=$('#tmont'); if(!i) return;
+  i.addEventListener('input',()=>{const v=dinars(i.value);$('#tmonth').textContent=v===null?'':'= '+dt(v)});
+  $('#tok').onclick=async()=>{const b=$('#tok'),v=dinars(i.value);
+    if(v===null){toast('Tape un montant, par exemple 350 ou 350,500.');i.focus();return}
+    b.disabled=true;
+    try{await db.collection('tresorerie').add({montant:v,note:$('#tnote').value.trim(),date:new Date().toISOString()});toast('Caisse enregistrée : '+dt(v))}
+    catch(e){toast('Enregistrement impossible, réessaie.');b.disabled=false}};
+  view.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=async()=>{
+    if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Confirmer ?';setTimeout(()=>{if(b.isConnected){b.classList.remove('armed');b.textContent='Supprimer'}},3500);return}
+    b.disabled=true;try{await db.doc('tresorerie/'+b.dataset.tdel).delete();toast('Relevé supprimé')}catch(e){toast('Suppression impossible.');b.disabled=false}});
 }
 
 /* ---------- Export Excel ---------- */
@@ -1432,8 +1514,9 @@ render();
   window.claude.use('assets').then(a=>{assets=a}).catch(()=>{});
   window.claude.use('downloads').then(x=>{downloads=x;if(x&&tab==='bilan'&&loaded)render()}).catch(()=>{});
   let gotP=false,gotM=false;
-  db.collection('produits').onSnapshot(s=>{produits=s.docs.map(d=>({id:d.id,...d.data()}));gotP=true;const was=loaded;loaded=gotP&&gotM;if(tab==='vente'&&was){venteRefresh()}else if(tab==='courses'&&was){coursesRefresh()}else if(!(tab==='comptage'&&document.activeElement&&document.activeElement.matches('.crow input')))render();else updSave();if(was)approRefresh()},e=>toast('Connexion au stock perdue. Recharge la page.'));
-  db.collection('mouvements').onSnapshot(s=>{mouvements=s.docs.map(d=>({id:d.id,...d.data()}));gotM=true;const was=loaded;loaded=gotP&&gotM;if(tab==='vente'&&was)venteRefresh();else if(tab==='courses'&&was)coursesRefresh();else if(tab!=='comptage')render();if(was)approRefresh()},e=>{});
+  db.collection('produits').onSnapshot(s=>{produits=s.docs.map(d=>({id:d.id,...d.data()}));setTimeout(refreshDetail,0);gotP=true;const was=loaded;loaded=gotP&&gotM;if(tab==='vente'&&was){venteRefresh()}else if(tab==='courses'&&was){coursesRefresh()}else if(!(tab==='comptage'&&document.activeElement&&document.activeElement.matches('.crow input,#cqs')))render();else updSave();if(was)approRefresh()},e=>toast('Connexion au stock perdue. Recharge la page.'));
+  db.collection('mouvements').onSnapshot(s=>{mouvements=s.docs.map(d=>({id:d.id,...d.data()}));gotM=true;const was=loaded;loaded=gotP&&gotM;if(tab==='vente'&&was)venteRefresh();else if(tab==='courses'&&was)coursesRefresh();else if(tab!=='comptage'&&!(document.activeElement&&['tmont','tnote'].includes(document.activeElement.id)))render();if(was)approRefresh()},e=>{});
+  db.collection('tresorerie').onSnapshot(s=>{treso=s.docs.map(d=>({id:d.id,...d.data()}));const a=document.activeElement;if(loaded&&tab==='bilan'&&!(a&&(a.id==='tmont'||a.id==='tnote')))render()},e=>{});
   db.collection('appros').onSnapshot(s=>{appros=s.docs.map(d=>({id:d.id,...d.data()}));if(loaded)approRefresh()},e=>{});
   db.collection('courses').onSnapshot(s=>{courses=s.docs.map(d=>({id:d.id,...d.data()}));if(tab==='courses'&&loaded)coursesRefresh()},e=>{});
 })();
