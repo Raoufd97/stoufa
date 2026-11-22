@@ -1390,7 +1390,9 @@ function renderBilan(){
     ${nSansPrix?`<p class="hint">${nSansPrix} pièce${nSansPrix>1?'s':''} sans prix complet ne ${nSansPrix>1?'sont':'est'} pas comptée${nSansPrix>1?'s':''} dans ces totaux. Filtre « Prix manquant » dans l'onglet Stock pour les compléter.</p>`:''}
     ${downloads?`<h3 class="section-h">Sauvegarde</h3>
     <div class="box"><p class="hint">Télécharge tout dans un fichier Excel : stock, ventes et achats, bilan par mois, liste d'appro. Garde une copie de temps en temps.</p>
-      <button class="btn block" type="button" id="xport">Exporter en Excel</button></div>`:''}`;
+      <button class="btn block" type="button" id="xport">Exporter en Excel</button></div>
+    <div class="box"><p class="hint">Sauvegarde complète : tout le stock, les ventes, les appros, la caisse et toutes les photos dans un seul fichier .zip.</p>
+      <button class="btn block" type="button" id="zport">Sauvegarde complète avec photos (.zip)</button></div>`:''}`;
   $('#mprev').onclick=()=>{if(idx>0){moisSel=sorted[idx-1];render()}};
   view.querySelectorAll('[data-mk]').forEach(b=>b.onclick=()=>{moisSel=b.dataset.mk;render()});
   const vd=$('#vdet'); if(vd) vd.addEventListener('toggle',()=>{venteOpen=vd.open});
@@ -1404,6 +1406,7 @@ function renderBilan(){
     catch(e){toast('Annulation impossible, réessaie.');b.disabled=false}});
   $('#mnext').onclick=()=>{if(idx<sorted.length-1){moisSel=sorted[idx+1];render()}};
   const xb=$('#xport'); if(xb) xb.onclick=()=>exportExcel(xb);
+  const zb=$('#zport'); if(zb) zb.onclick=()=>exportZip(zb);
   $('#kach').onclick=()=>{document.querySelector('nav.tabs [data-tab="courses"]').click();setTimeout(()=>{const h=$('#chist');if(h)h.scrollIntoView({block:'center'})},80)};
   view.querySelectorAll('.item').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
   bindTreso();
@@ -1444,6 +1447,40 @@ function bindTreso(){
   view.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=async()=>{
     if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Confirmer ?';setTimeout(()=>{if(b.isConnected){b.classList.remove('armed');b.textContent='Supprimer'}},3500);return}
     b.disabled=true;try{await db.doc('tresorerie/'+b.dataset.tdel).delete();toast('Relevé supprimé')}catch(e){toast('Suppression impossible.');b.disabled=false}});
+}
+
+/* ---------- Sauvegarde complète (.zip) : fiches + photos ---------- */
+let zipLib=null;
+function loadZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  if(!zipLib) zipLib=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';sc.onload=()=>window.JSZip?res(window.JSZip):rej(new Error('lib'));sc.onerror=()=>{zipLib=null;rej(new Error('lib'))};document.head.appendChild(sc)});
+  return zipLib;
+}
+async function exportZip(b){
+  if(!downloads) return;
+  b.disabled=true; const lbl=b.textContent; b.textContent='Préparation…';
+  try{
+    const Z=await loadZip(), zip=new Z(), ids=new Set();
+    const cols={produits,mouvements,appros,courses,tresorerie:treso};
+    for(const [c,arr] of Object.entries(cols)) for(const x of arr){const {id,...d}=x;
+      zip.file('data/'+c+'/'+id+'.json',JSON.stringify(d,null,1));
+      [d.photo,d.emplacementPhoto,...(Array.isArray(d.factures)?d.factures:[])].forEach(v=>{if(typeof v==='string'&&/^[0-9a-f]{32}$/.test(v))ids.add(v)})}
+    const list=[...ids]; let n=0, miss=0;
+    for(let i=0;i<list.length;i+=6){
+      await Promise.all(list.slice(i,i+6).map(async id=>{try{const r=await fetch(window.BLOB_BASE+id);if(!r.ok)throw 0;zip.file('photos/'+id+'.jpg',await r.blob())}catch(e){miss++}n++}));
+      if(b.isConnected) b.textContent='Photos '+n+'/'+list.length+'…';
+    }
+    if(b.isConnected) b.textContent='Création du fichier…';
+    const buf=await zip.generateAsync({type:'arraybuffer',compression:'STORE'});
+    const t=new Date(), f='Stoufa-sauvegarde-'+t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0')+'.zip';
+    await downloads.save({filename:f,data:buf});
+    toast(miss?'Sauvegarde enregistrée ('+miss+' photo'+(miss>1?'s':'')+' introuvable'+(miss>1?'s':'')+')':'Sauvegarde complète enregistrée');
+  }catch(e){
+    const c=e&&e.code;
+    if(c==='declined'){} else if(c==='rate_limited') toast('Une fenêtre de téléchargement est déjà ouverte.');
+    else if(e&&e.message==='lib') toast("Impossible de préparer le fichier. Vérifie ta connexion et réessaie.");
+    else toast('Sauvegarde impossible pour le moment.');
+  }finally{if(b.isConnected){b.disabled=false;b.textContent=lbl}}
 }
 
 /* ---------- Export Excel ---------- */
