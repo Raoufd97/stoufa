@@ -14,9 +14,9 @@ window.STOUFA_CONFIG = {
   boutique: {
     nom: "Atelier Mustapha Attia",
     ville: "Ezzahra",
-    adresse: "",                 // ex. "12 rue …, Ezzahra"
-    whatsapp: "",                // numéro au format international sans + ni espaces, ex. "21698123456"
-    telephone: "",               // ex. "+216 98 123 456"
+    adresse: "Rue 14 Janvier, Ezzahra Nakhil",                 // ex. "12 rue …, Ezzahra"
+    whatsapp: "21625435170",                // numéro au format international sans + ni espaces, ex. "21698123456"
+    telephone: "+216 25 435 170",               // ex. "+216 98 123 456"
     horaires: "",                // ex. "Lun–Sam · 8h30–13h et 15h–19h"
     googleMaps: "https://share.google/T34OQE5KIK73OZ6LB"             // lien « Partager » de la fiche Google Maps
   }
