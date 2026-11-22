@@ -8,5 +8,16 @@ window.STOUFA_CONFIG = {
   // Compte unique de la boutique (créé dans Supabase > Authentication > Users).
   // Le mot de passe de ce compte = le code d'accès demandé à l'ouverture.
   email: "douihechraouf@gmail.com",
-  bucket: "photos"
+  bucket: "photos",
+
+  // Infos affichées sur la vitrine publique (catalogue/)
+  boutique: {
+    nom: "Atelier Mostfa Atiya",
+    ville: "Ezzahra",
+    adresse: "",                 // ex. "12 rue …, Ezzahra"
+    whatsapp: "",                // numéro au format international sans + ni espaces, ex. "21698123456"
+    telephone: "",               // ex. "+216 98 123 456"
+    horaires: "",                // ex. "Lun–Sam · 8h30–13h et 15h–19h"
+    googleMaps: ""               // lien « Partager » de la fiche Google Maps
+  }
 };
