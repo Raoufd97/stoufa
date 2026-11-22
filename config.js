@@ -18,6 +18,6 @@ window.STOUFA_CONFIG = {
     whatsapp: "",                // numéro au format international sans + ni espaces, ex. "21698123456"
     telephone: "",               // ex. "+216 98 123 456"
     horaires: "",                // ex. "Lun–Sam · 8h30–13h et 15h–19h"
-    googleMaps: ""               // lien « Partager » de la fiche Google Maps
+    googleMaps: "https://share.google/T34OQE5KIK73OZ6LB"             // lien « Partager » de la fiche Google Maps
   }
 };
