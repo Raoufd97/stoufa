@@ -12,7 +12,7 @@ window.STOUFA_CONFIG = {
 
   // Infos affichées sur la vitrine publique (catalogue/)
   boutique: {
-    nom: "Atelier Mostfa Atiya",
+    nom: "Atelier Mustapha Attia",
     ville: "Ezzahra",
     adresse: "",                 // ex. "12 rue …, Ezzahra"
     whatsapp: "",                // numéro au format international sans + ni espaces, ex. "21698123456"
