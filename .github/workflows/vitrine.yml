@@ -1,0 +1,29 @@
+name: Vitrine
+# Régénère les pages de la vitrine (accueil, pièces, catégories, sitemap) à partir du stock.
+on:
+  schedule:
+    - cron: '23 1 * * *'      # chaque nuit (~2h23 en Tunisie)
+  workflow_dispatch:           # bouton « Run workflow » dans l'onglet Actions
+  push:
+    branches: [main]
+    paths: ['scripts/**', 'assets/**', 'config.js']
+permissions:
+  contents: write
+concurrency:
+  group: vitrine
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/build-vitrine.mjs
+      - name: Publier si quelque chose a changé
+        run: |
+          git config user.name "vitrine-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A index.html pieces categorie catalogue sitemap.xml
+          if git diff --cached --quiet; then echo "Rien de nouveau"; else git commit -m "Vitrine : mise à jour du catalogue" && git push; fi

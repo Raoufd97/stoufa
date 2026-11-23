@@ -13,6 +13,8 @@ window.STOUFA_CONFIG = {
   // Infos affichées sur la vitrine publique (catalogue/)
   boutique: {
     nom: "Atelier Mustapha Attia",
+    depuis: "1980",
+    siteUrl: "https://raoufd97.github.io/stoufa",   // adresse publique du site (à changer si nom de domaine)
     ville: "Ezzahra",
     adresse: "Rue 14 Janvier, Ezzahra Nakhil",                 // ex. "12 rue …, Ezzahra"
     whatsapp: "21625435170",                // numéro au format international sans + ni espaces, ex. "21698123456"
