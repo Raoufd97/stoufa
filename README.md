@@ -56,3 +56,18 @@ Aucun nom de domaine n'est nécessaire.
   prix et ventes ne sont visibles qu'avec le code d'accès.
 - Supabase gratuit met le projet en pause après environ une semaine sans aucune
   utilisation : il suffit de cliquer sur « Restore » dans le tableau de bord.
+
+## Structure du site (depuis novembre 2026)
+
+| Adresse | Contenu |
+|---|---|
+| `/` | Vitrine publique (générée) |
+| `/pieces/<nom>/` | Une page par pièce (générée) |
+| `/categorie/velo/`, `mobylette/`, `peugeot/`, `vespa/` | Pages catégories (générées) |
+| `/gestion/` | Appli de gestion (code d'accès, non indexée) |
+| `/gestion/import.html` | Import d'une sauvegarde .zip |
+| `/sitemap.xml` | Plan du site pour Google Search Console |
+
+Les pages de la vitrine sont générées par `scripts/build-vitrine.mjs` à partir de la vue `catalogue`
+(`supabase/catalogue.sql`). La GitHub Action `Vitrine` les régénère chaque nuit, et à la demande
+(onglet Actions → Vitrine → Run workflow). Ne pas modifier `index.html`, `pieces/` ni `categorie/` à la main.
