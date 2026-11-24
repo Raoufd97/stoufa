@@ -20,7 +20,7 @@ const DEPUIS = B.depuis || '1980';
 const WA = String(B.whatsapp || '').replace(/\D/g, '');
 
 /* ---------- Données ---------- */
-// CATALOGUE_JSON=fichier.json permet de tester sans Supabase
+// CATALOGUE_JSON=fichier.json : test hors ligne
 let raw;
 if (process.env.CATALOGUE_JSON) raw = JSON.parse(readFileSync(process.env.CATALOGUE_JSON, 'utf8'));
 else {

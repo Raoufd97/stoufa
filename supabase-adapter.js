@@ -1,13 +1,4 @@
-/*
-  Adaptateur Supabase pour l'appli Boutique de Stoufa.
-  L'appli a été écrite pour le stockage de Claude (window.claude.use('db' | 'assets' | 'downloads')).
-  Ce fichier recrée exactement la même interface au-dessus de Supabase, pour que
-  index.html reste identique (design, onglets, calculs).
-
-  - db        : table "docs" (collection, id, data jsonb) + temps réel
-  - assets    : bucket Storage "photos" (public en lecture, écriture réservée au compte boutique)
-  - downloads : téléchargement classique d'un fichier (export Excel)
-*/
+/* Connexion Supabase */
 (function () {
   const CFG = window.STOUFA_CONFIG || {};
   const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
