@@ -126,6 +126,7 @@ nav.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
 .total b{font-family:var(--f-display);font-size:28px}
 .warnbox{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:8px 10px;font-size:14px}
 .undo{border:1px solid var(--line);background:var(--bg);border-radius:8px;height:34px;padding:0 10px;font-size:13px;font-weight:600}
+.morebtn{display:block;width:100%;height:44px;margin-top:8px;border:1px solid var(--line);background:var(--surface);border-radius:10px;font-weight:600;color:var(--accent)}
 .undo.armed{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
 nav.tabs button{height:62px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;padding:0;min-width:0;font-weight:600;color:var(--muted)}
 nav.tabs button[aria-current="page"]{color:var(--accent)}
@@ -319,7 +320,7 @@ button.kpi{width:100%;text-align:left;cursor:pointer}
 const $=s=>document.querySelector(s);
 const view=$('#view');
 let db=null, assets=null, downloads=null, produits=[], mouvements=[], courses=[], appros=[], treso=[], loaded=false;
-let detId=null, venteOpen=false, tab='stock', filtre='tout', sousFiltre='', cSearch='', q='', moisSel=null, lastResult=null, approDate=todayKey(), apSheet=null;
+let detId=null, venteOpen=false, ventesAll=false, vdetAll=false, VLIM=5, tab='stock', filtre='tout', sousFiltre='', cSearch='', q='', moisSel=null, lastResult=null, approDate=todayKey(), apSheet=null;
 let counts={};
 try{counts=JSON.parse(localStorage.getItem('comptage')||'{}')||{}}catch(e){counts={}}
 const saveCounts=()=>{try{localStorage.setItem('comptage',JSON.stringify(counts))}catch(e){}};
@@ -1354,6 +1355,7 @@ function renderBilan(){
   const keys=new Set([cur]); mouvements.forEach(m=>keys.add(moisKey(m.date)));
   const sorted=[...keys].filter(Boolean).sort();
   if(!moisSel||!keys.has(moisSel)) moisSel=cur;
+  if(renderBilan.m!==moisSel){ventesAll=false;vdetAll=false;renderBilan.m=moisSel}
   const idx=sorted.indexOf(moisSel);
   const stats=k=>{let ca=0,mg=0,caM=0,pc=0,ach=0,inc=0;mouvements.forEach(m=>{if(moisKey(m.date)!==k)return;const pv=known(m.prixVente),pa=known(m.prixAchat);if(m.type==='vente'){pc+=m.qte;if(pv)ca+=m.qte*m.prixVente;if(pv&&pa){mg+=m.qte*(m.prixVente-m.prixAchat);caM+=m.qte*m.prixVente}else inc+=m.qte}else if(m.type==='achat'&&pa){ach+=m.qte*m.prixAchat}});ach-=remisesMois(k);return{ca,mg,caM,pc,ach,inc}};
   const s=stats(moisSel);
@@ -1378,12 +1380,13 @@ function renderBilan(){
       <div class="legend"><span><i style="background:var(--accent-soft)"></i>Chiffre d'affaires (en haut)</span><span><i style="background:var(--accent)"></i>Marge (sous le mois)</span></div>
       <p class="hint" style="margin-top:6px">En dinars, arrondi. Touche un mois pour voir son détail.</p></div>
     <h3 class="section-h">Ventes du mois</h3>
-    ${top.length?`<div class="list">${top.map(a=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(a.nom)}</div><div class="meta num">${a.q} vendu${a.q>1?'s':''} · ${a.ca===null?'prix de vente ?':dt(a.ca)}</div></div>${a.mg===null?`<div class="noprice">Marge ?</div>`:`<div class="prix num">+${pf(a.mg)}</div>`}</div>`).join('')}</div>`:`<div class="empty"><p>Pas encore de ventes ce mois-ci. Elles apparaissent après un comptage.</p></div>`}
+    ${top.length?`<div class="list">${(ventesAll?top:top.slice(0,VLIM)).map(a=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(a.nom)}</div><div class="meta num">${a.q} vendu${a.q>1?'s':''} · ${a.ca===null?'prix de vente ?':dt(a.ca)}</div></div>${a.mg===null?`<div class="noprice">Marge ?</div>`:`<div class="prix num">+${pf(a.mg)}</div>`}</div>`).join('')}</div>${top.length>VLIM?`<button type="button" class="morebtn" id="vmore">${ventesAll?'Afficher moins':`Afficher plus (${top.length-VLIM})`}</button>`:''}`:`<div class="empty"><p>Pas encore de ventes ce mois-ci. Elles apparaissent après un comptage.</p></div>`}
     ${(()=>{const vm=mouvements.filter(m=>m.type==='vente'&&moisKey(m.date)===moisSel).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
       return vm.length?`<details class="prixbox" id="vdet" ${venteOpen?'open':''}><summary><span>Détail des ventes (${vm.length}) <span class="muted" style="font-weight:500">· annuler une vente</span></span></summary>
-      ${vm.map(m=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(m.nom||'Pièce')}</div>
+      ${(vdetAll?vm:vm.slice(0,VLIM)).map(m=>`<div class="lrow"><div class="info"><div style="font-weight:600;overflow-wrap:anywhere">${esc(m.nom||'Pièce')}</div>
         <div class="meta num">${esc(new Date(m.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}))} · ${m.qte} × ${known(m.prixVente)?pf(m.prixVente):'prix ?'}${known(m.prixVente)?' = '+dt(m.qte*m.prixVente):''} · ${m.source==='manuelle'?'notée':'comptage'}</div></div>
         <button class="undo" type="button" data-vundo="${esc(m.id)}">Annuler</button></div>`).join('')}
+      ${vm.length>VLIM?`<div style="padding:0 12px"><button type="button" class="morebtn" id="vdmore">${vdetAll?'Afficher moins':`Afficher plus (${vm.length-VLIM})`}</button></div>`:''}
       <p class="hint" style="padding:0 12px 12px">« Annuler » retire la vente du bilan. Pour une vente notée, la quantité revient dans le stock. Pour une vente trouvée au comptage, le stock compté ne change pas.</p></details>`:''})()}
     <h3 class="section-h">Stock actuel</h3>
     <div class="kpis"><div class="kpi"><span>Valeur au prix d'achat</span><b class="num">${dt(valAchat)}</b></div><div class="kpi"><span>Si tout est vendu</span><b class="num">${dt(valVente)}</b></div></div>
@@ -1396,6 +1399,8 @@ function renderBilan(){
   $('#mprev').onclick=()=>{if(idx>0){moisSel=sorted[idx-1];render()}};
   view.querySelectorAll('[data-mk]').forEach(b=>b.onclick=()=>{moisSel=b.dataset.mk;render()});
   const vd=$('#vdet'); if(vd) vd.addEventListener('toggle',()=>{venteOpen=vd.open});
+  const vmb=$('#vmore'); if(vmb) vmb.onclick=()=>{ventesAll=!ventesAll;render();if(!ventesAll){const h=$('#vmore');if(h)h.scrollIntoView({block:'center'})}};
+  const vdb=$('#vdmore'); if(vdb) vdb.onclick=()=>{vdetAll=!vdetAll;render();if(!vdetAll){const h=$('#vdmore');if(h)h.scrollIntoView({block:'center'})}};
   view.querySelectorAll('[data-vundo]').forEach(b=>b.onclick=async()=>{
     if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent='Confirmer ?';setTimeout(()=>{if(b.isConnected){b.classList.remove('armed');b.textContent='Annuler'}},3500);return}
     const m=mouvements.find(x=>x.id===b.dataset.vundo); if(!m) return; b.disabled=true;
