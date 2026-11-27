@@ -194,6 +194,10 @@ nav.tabs svg{width:22px;height:22px}
 .chips.sub{margin-top:6px}
 .chips.sub .chip{height:30px;font-size:13px}
 .mtags{display:flex;gap:6px;flex-wrap:wrap}
+.tagpromo{font-size:12px;font-weight:700;color:var(--bad);background:var(--bad-bg);padding:2px 8px;border-radius:10px;white-space:nowrap}
+.prixold{font-size:13px;color:var(--muted);text-decoration:line-through;white-space:nowrap;text-align:right}
+.promo-box{border-color:var(--bad)}
+.promo-box .flabel{color:var(--bad)}
 .tagrupt{font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:2px 8px;border-radius:10px;white-space:nowrap}
 .lnk{border:0;background:none;color:var(--accent);font-weight:600;font-size:13px;padding:4px 0;text-align:left}
 .tbtn{border:0;background:none;color:var(--tag);font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:6px 2px;margin-left:4px;font-size:inherit}
@@ -343,6 +347,11 @@ const pf=v=>known(v)?nf.format(v/1000):'?';
 /* Coût réel d'une pièce : prix d'achat après la remise du dernier appro, sinon prix tarif */
 const cout=p=>known(p.coutNet)?p.coutNet:(known(p.prixAchat)?p.prixAchat:null);
 const incomplet=p=>!known(p.prixVente)||!known(p.prixAchat);
+/* Promo : réduction saisie en millimes (p.promo), éventuellement jusqu'à une date (p.promoFin, incluse) */
+const promoOn=p=>!!p&&known(p.promo)&&p.promo>0&&known(p.prixVente)&&p.promo<p.prixVente&&(!p.promoFin||p.promoFin>=todayKey());
+const prixEff=p=>promoOn(p)?p.prixVente-p.promo:(known(p.prixVente)?p.prixVente:null);
+const pctOf=(red,pv)=>Math.round(red/pv*100);
+const promoTag=p=>promoOn(p)?`<span class="tagpromo">Promo −${pctOf(p.promo,p.prixVente)} %</span>`:'';
 const CAT={velo:'Vélo',moto:'Moto',autre:'Autre'};
 /* Sous-catégories moto : une pièce peut aller sur plusieurs types */
 const MOTO={mobylette:'Mobylette',peugeot:'Peugeot',vespa:'Vespa'};
@@ -424,6 +433,8 @@ function renderChips(){
   const sansPrix=produits.filter(incomplet).length;
   const opts=[['tout','Tout ('+produits.length+')'],['velo','Vélo'],['moto','Moto'],['racheter','À racheter ('+low+')']];
   if(sansPrix||filtre==='prix') opts.push(['prix','Prix manquant ('+sansPrix+')']);
+  const nPromo=produits.filter(promoOn).length;
+  if(nPromo||filtre==='promo') opts.push(['promo','En promo ('+nPromo+')']);
   if(nArr||filtre==='arrete') opts.push(['arrete','Plus dispo ('+nArr+')']);
   $('#chips').innerHTML=opts.map(([k,l])=>`<button class="chip" type="button" data-f="${k}" aria-pressed="${filtre===k}">${esc(l)}</button>`).join('');
   $('#chips').querySelectorAll('button').forEach(b=>b.onclick=()=>{filtre=b.dataset.f;if(filtre!=='moto')sousFiltre='';render()});
@@ -467,14 +478,15 @@ function renderStock(){
     if(filtre==='racheter' && (p.arrete||(p.stock||0)>(p.seuil||0))) return false;
     if(filtre==='arrete' && !p.arrete) return false;
     if(filtre==='prix' && !incomplet(p)) return false;
+    if(filtre==='promo' && !promoOn(p)) return false;
     return true;
   }).sort((a,b)=>norm(a.nom).localeCompare(norm(b.nom)));
   let approx=false; if(q.trim()){const r=cherche(list,q,txtP);list=r.items;approx=!r.exact}
   if(!list.length){view.innerHTML=html+`<div class="empty"><p>Rien ne correspond${q?' à « '+esc(q)+' »':''}.</p></div>`;bindEx();return}
   if(approx) html+=`<p class="hint">Aucune pièce ne contient tous ces mots. Voici celles qui s'en rapprochent :</p>`;
   html+=`<div class="list">`+list.map(p=>{const [c,l]=etat(p);return `<button class="item" type="button" data-id="${esc(p.id)}">${thumb(p)}
-    <div class="info"><div class="nom">${esc(p.nom)}</div><div class="meta">${locTag(p)}<span>${esc(catLabel(p))}</span>${p.arrete?'<span class="tagrupt">Plus dispo</span>':''}${p.exemple?'<span>· exemple</span>':''}</div></div>
-    <div class="right">${known(p.prixVente)?`<div class="prix num">${dt(p.prixVente)}</div>`:`<div class="noprice">Prix de vente ?</div>`}<div class="qty num ${c}">${esc(l)}</div></div></button>`}).join('')+`</div>`;
+    <div class="info"><div class="nom">${esc(p.nom)}</div><div class="meta">${locTag(p)}<span>${esc(catLabel(p))}</span>${promoTag(p)}${p.arrete?'<span class="tagrupt">Plus dispo</span>':''}${p.exemple?'<span>· exemple</span>':''}</div></div>
+    <div class="right">${promoOn(p)?`<div class="prixold num">${dt(p.prixVente)}</div>`:''}${known(p.prixVente)?`<div class="prix num">${dt(prixEff(p))}</div>`:`<div class="noprice">Prix de vente ?</div>`}<div class="qty num ${c}">${esc(l)}</div></div></button>`}).join('')+`</div>`;
   view.innerHTML=html;
   view.querySelectorAll('.item').forEach(b=>b.onclick=()=>openDetail(b.dataset.id));
   bindEx();
@@ -517,19 +529,20 @@ function openDetail(id,opt={}){
   const p=produits.find(x=>x.id===id); if(!p) return;
   const surListe=courses.find(c=>!c.fait&&!c.ignore&&c.produitId===p.id);
   const [c,l]=etat(p);
-  const marge=known(p.prixVente)&&known(cout(p))?p.prixVente-cout(p):null;
+  const marge=known(p.prixVente)&&known(cout(p))?prixEff(p)-cout(p):null;
+  const promoFini=known(p.promo)&&p.promo>0&&!promoOn(p)&&p.promoFin&&p.promoFin<todayKey();
   openSheet(`<div class="panel-h"><h2>${esc(p.nom)}</h2><button class="close" type="button" aria-label="Fermer">×</button></div>
     ${pic(p)?`<img class="bigphoto" src="${esc(pic(p))}" alt="Photo de ${esc(p.nom)}">`:''}
-    <div class="meta" style="font-size:15px">${locTag(p)}<span>${esc(catLabel(p))}</span><span class="qty ${c}" id="dqty">${esc(l)}</span></div>
+    <div class="meta" style="font-size:15px">${locTag(p)}<span>${esc(catLabel(p))}</span>${promoTag(p)}<span class="qty ${c}" id="dqty">${esc(l)}</span></div>
     ${locSrc(p)?`<div class="field"><span class="flabel">Où la trouver</span><button type="button" class="zoom" id="lzoom" aria-label="Agrandir la photo d'emplacement"><img class="bigphoto" src="${esc(locSrc(p))}" alt="Emplacement de ${esc(p.nom)}"></button></div>`:`<p class="hint">Pas de photo d'emplacement. Ajoute-la avec « Modifier ».</p>`}
-    <div class="facts"><div class="fact"><span>Vente</span><b class="num">${pf(p.prixVente)}</b></div><div class="fact"><span>Achat</span><b class="num">${pf(p.prixAchat)}</b></div><div class="fact"><span>Marge</span><b class="num">${pf(marge)}</b></div></div>
+    <div class="facts"><div class="fact"><span>Vente${promoOn(p)?' (promo)':''}</span><b class="num">${pf(prixEff(p))}</b>${promoOn(p)?`<div class="prixold num" style="text-align:left">${pf(p.prixVente)}</div>`:''}</div><div class="fact"><span>Achat</span><b class="num">${pf(p.prixAchat)}</b></div><div class="fact"><span>Marge</span><b class="num">${pf(marge)}</b></div></div>
     ${known(p.coutNet)&&p.coutNet!==p.prixAchat?`<p class="hint">Coût réel après remise du dernier appro : <b>${pf(p.coutNet)} DT</b> (la marge est calculée dessus).</p>`:''}
     <p class="hint">Prix en dinars.${incomplet(p)?' « ? » = prix pas encore connu, à compléter avec « Modifier ».':''} Seuil d'alerte : ${p.seuil||0}.${p.dernierComptage?' Dernier comptage : '+new Date(p.dernierComptage).toLocaleDateString('fr-FR')+'.':''}</p>
     ${p.arrete?`<div class="warnbox"><b>N'existe plus chez le fournisseur</b>${p.arreteLe?' (noté le '+new Date(p.arreteLe).toLocaleDateString('fr-FR')+')':''}.${p.arreteNote?' Note : « '+esc(p.arreteNote)+' ».':''} Elle n'est plus ajoutée automatiquement à l'appro.</div>`:''}
     ${p.notes?`<p style="margin:0;white-space:pre-wrap">${esc(p.notes)}</p>`:''}
     ${liesDe(p).length?`<div class="field"><span class="flabel">Se vend avec</span><div class="lies">${liesDe(p).map(lieChip).join('')}</div></div>`:''}
     <div class="box sold-box" id="vendu"><div class="flabel">Vendu</div>
-      <div class="row2"><div class="field"><label for="dvprix">Prix unitaire (millimes)</label><input id="dvprix" class="mm" inputmode="numeric" value="${known(p.prixVente)?esc(String(p.prixVente)):''}" placeholder="Prix ?">${mmHint(p.prixVente)}</div>
+      <div class="row2"><div class="field"><label for="dvprix">Prix unitaire (millimes)</label><input id="dvprix" class="mm" inputmode="numeric" value="${known(p.prixVente)?esc(String(prixEff(p))):''}" placeholder="Prix ?">${mmHint(prixEff(p))}</div>
         <div class="field"><label for="dvqte">Unités vendues</label><div class="step"><button type="button" id="dvminus" aria-label="Une unité de moins">−</button><input id="dvqte" inputmode="numeric" value="1"><button type="button" id="dvplus" aria-label="Une unité de plus">+</button></div></div></div>
       <div id="dvwarn"></div>
       <button class="btn primary block" type="button" id="dvok">Enregistrer la vente</button></div>
@@ -539,6 +552,13 @@ function openDetail(id,opt={}){
       <div class="field"><label for="rp">Prix d'achat (millimes)</label><input id="rp" class="mm" inputmode="numeric" value="${known(p.prixAchat)?esc(String(p.prixAchat)):''}" placeholder="facultatif">${mmHint(p.prixAchat)}</div></div>
       <div class="field"><label for="rd">Date de l'achat</label><input id="rd" type="date" class="dinput" value="${esc(approDate)}" max="${esc(todayKey())}"></div>
       <button class="btn primary" type="button" id="rok">Ajouter au stock</button></div>
+    <div class="box promo-box" id="promo"><div class="flabel">Promo${promoOn(p)?' en cours':''}</div>
+      ${!known(p.prixVente)?`<p class="hint">Ajoute d'abord un prix de vente avec « Modifier ».</p>`:`
+      ${promoFini?`<p class="hint">La dernière promo s'est terminée le ${esc(new Date(p.promoFin+'T12:00').toLocaleDateString('fr-FR'))}.</p>`:''}
+      <div class="row2"><div class="field"><label for="prred">Réduction (millimes)</label><input id="prred" class="mm" inputmode="numeric" value="${promoOn(p)?esc(String(p.promo)):''}" placeholder="ex. 2000">${mmHint(promoOn(p)?p.promo:null)}</div>
+        <div class="field"><label for="prfin">Jusqu'au (facultatif)</label><input id="prfin" type="date" class="dinput" value="${promoOn(p)&&p.promoFin?esc(p.promoFin):''}" min="${esc(todayKey())}"></div></div>
+      <div id="prinfo" class="hint"></div>
+      <div class="actions"><button class="btn primary" type="button" id="prok">${promoOn(p)?'Modifier la promo':'Lancer la promo'}</button>${promoOn(p)?'<button class="btn" type="button" id="prstop">Arrêter la promo</button>':''}</div>`}</div>
     <button class="btn block" type="button" id="tolist">${surListe?"Déjà dans l'appro (×"+surListe.qte+') · ajouter 1':"Ajouter à l'appro"}</button>
     <div class="actions"><button class="btn" type="button" id="edit">Modifier</button><button class="btn" type="button" id="dup">Dupliquer</button></div>
     <button class="btn block" type="button" id="arr">${p.arrete?'Remettre comme disponible':"Marquer « n'existe plus chez le fournisseur »"}</button>
@@ -553,6 +573,20 @@ function openDetail(id,opt={}){
     catch(e){toast('Modification impossible.');b.disabled=false}};
   $('#panel').querySelectorAll('[data-lie]').forEach(b=>b.onclick=()=>openDetail(b.dataset.lie));
   $('#dup').onclick=()=>openForm(null,p.id);
+  if($('#prok')){
+    const prUpd=()=>{const r=pn($('#prred').value),pv=p.prixVente;
+      $('#prinfo').innerHTML=r===null||r<=0?'Indique la réduction en millimes (ou en dinars avec une virgule : 2,5).':(r>=pv?`<span style="color:var(--bad)">La réduction doit être plus petite que le prix (${dt(pv)}).</span>`:`Nouveau prix : <b class="num">${dt(pv-r)}</b> au lieu de ${dt(pv)}, soit <b>−${pctOf(r,pv)} %</b>.`+(known(cout(p))&&pv-r<cout(p)?` <span style="color:var(--bad)">Attention : en dessous du coût d'achat (${dt(cout(p))}).</span>`:''))};
+    $('#prred').addEventListener('input',prUpd); prUpd();
+    $('#prok').onclick=async()=>{const r=pn($('#prred').value),fin=$('#prfin').value||'';
+      if(r===null||r<=0||r>=p.prixVente){toast('Indique une réduction plus petite que le prix de vente.');return}
+      if(fin&&fin<todayKey()){toast('La date de fin est déjà passée.');return}
+      $('#prok').disabled=true;
+      try{await db.doc('produits/'+p.id).update({promo:r,promoFin:fin,promoDebut:promoOn(p)&&p.promoDebut?p.promoDebut:todayKey()});toast('Promo enregistrée : −'+pctOf(r,p.prixVente)+' %');closeSheet()}
+      catch(e){toast('Enregistrement impossible, réessaie.');$('#prok').disabled=false}};
+    if($('#prstop')) $('#prstop').onclick=async()=>{$('#prstop').disabled=true;
+      try{await db.doc('produits/'+p.id).update({promo:null,promoFin:'',promoDebut:null});toast('Promo arrêtée');closeSheet()}
+      catch(e){toast('Modification impossible, réessaie.');$('#prstop').disabled=false}};
+  }
   $('#tolist').onclick=async()=>{const b=$('#tolist');b.disabled=true;try{await addCourse({texte:p.nom,produitId:p.id,qte:1});toast("Ajouté à l'appro");closeSheet()}catch(e){toast('Ajout impossible, réessaie.');b.disabled=false}};
   if(known(opt.prixAchat)){const r=$('#rp');r.value=opt.prixAchat;r.dispatchEvent(new Event('input',{bubbles:true}))}
   if(opt.qte){$('#rq').value=opt.qte;setTimeout(()=>{const r=$('#reappro');if(r)r.scrollIntoView({block:'center'})},60)}
@@ -865,7 +899,7 @@ async function saveComptage(){
     for(const [id,v] of Object.entries(counts)){
       const p=produits.find(x=>x.id===id); const n=int(v); if(!p||n===null){delete counts[id];continue}
       const compte=Math.max(0,n), d=(p.stock||0)-compte;
-      const pv=known(p.prixVente)?p.prixVente:null, pa=cout(p);
+      const pv=prixEff(p), pa=cout(p);
       if(d!==0) await db.collection('mouvements').add({type:d>0?'vente':'ecart',produitId:id,nom:p.nom,qte:Math.abs(d),prixAchat:pa,prixVente:pv,date:now,comptage:cid});
       await db.doc('produits/'+id).update({stock:compte,dernierComptage:now});
       if(d>0){r.pieces+=d;if(pv!==null)r.ca+=d*pv;if(pv!==null&&pa!==null)r.marge+=d*(pv-pa);else r.sansPrix.push(p.nom)}
@@ -911,7 +945,7 @@ function paintSug(){
   const s=$('#vsug'); if(!s) return;
   s.innerHTML=sugList.length?sugList.map((p,i)=>{const [c,l]=etat(p);return `<button type="button" role="option" data-id="${esc(p.id)}" aria-selected="${i===sugIdx}">${thumb(p,'sm')}
     <div style="min-width:0"><div style="font-weight:600;overflow-wrap:anywhere">${esc(p.nom)}</div><div class="meta">${locTag(p)}<span class="qty ${c}">${esc(l)}</span></div></div>
-    ${known(p.prixVente)?`<div class="prix num" style="font-size:17px">${pf(p.prixVente)}</div>`:`<div class="noprice">Prix ?</div>`}</button>`}).join(''):`<div class="none">Aucune pièce ne correspond. Ajoute-la dans l'onglet Stock.</div>`;
+    ${known(p.prixVente)?`<div><div class="prix num" style="font-size:17px">${pf(prixEff(p))}</div>${promoOn(p)?`<div class="prixold num">${pf(p.prixVente)}</div>`:''}</div>`:`<div class="noprice">Prix ?</div>`}</button>`}).join(''):`<div class="none">Aucune pièce ne correspond. Ajoute-la dans l'onglet Stock.</div>`;
   s.hidden=false; $('#vq').setAttribute('aria-expanded','true');
   s.querySelectorAll('button').forEach(b=>{b.addEventListener('pointerdown',e=>e.preventDefault());b.onclick=()=>pick(b.dataset.id)});
   const a=s.querySelector('[aria-selected="true"]'); if(a) a.scrollIntoView({block:'nearest'});
@@ -928,8 +962,8 @@ function renderVForm(){
     if(ok) setTimeout(()=>{if(tab==='vente'&&!venteSel)renderVForm()},ls.length?20100:8100);
     return}
   const [c,l]=etat(p);
-  box.innerHTML=`<div class="box"><div class="selcard">${thumb(p)}<div style="min-width:0"><div style="font-weight:600;font-size:17px;overflow-wrap:anywhere">${esc(p.nom)}</div><div class="meta">${locTag(p)}<span class="qty ${c}">${esc(l)}</span></div></div></div>
-    <div class="row2"><div class="field"><label for="vprix">Prix unitaire (millimes)</label><input id="vprix" class="mm" inputmode="numeric" value="${known(p.prixVente)?esc(String(p.prixVente)):''}" placeholder="Prix ?">${mmHint(p.prixVente)}</div>
+  box.innerHTML=`<div class="box"><div class="selcard">${thumb(p)}<div style="min-width:0"><div style="font-weight:600;font-size:17px;overflow-wrap:anywhere">${esc(p.nom)}</div><div class="meta">${locTag(p)}${promoTag(p)}<span class="qty ${c}">${esc(l)}</span></div></div></div>
+    <div class="row2"><div class="field"><label for="vprix">Prix unitaire (millimes)${promoOn(p)?' · promo':''}</label><input id="vprix" class="mm" inputmode="numeric" value="${known(p.prixVente)?esc(String(prixEff(p))):''}" placeholder="Prix ?">${mmHint(prixEff(p))}</div>
       <div class="field"><label for="vqte">Unités vendues</label><div class="step"><button type="button" id="vminus" aria-label="Une unité de moins">−</button><input id="vqte" inputmode="numeric" value="1"><button type="button" id="vplus" aria-label="Une unité de plus">+</button></div></div></div>
     ${liesDe(p).length?`<div class="hint">Se vend souvent avec : ${liesDe(p).map(x=>esc(x.nom)).join(', ')}</div>`:''}
     <div id="vwarn"></div>
