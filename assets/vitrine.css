@@ -6,6 +6,7 @@
   --green:#17624F; --green-d:#0F4A3B; --green-soft:#E1EEE7; --on-green:#FFFFFF;
   --tag:#F4C430; --tag-ink:#2A2205;
   --warn:#8A5200; --warn-bg:#FBEBD0;
+  --promo:#C4321C; --promo-soft:#FBE3DD; --on-promo:#FFFFFF;
   --wa:#1C9D4F; --on-wa:#FFFFFF;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -208,3 +209,14 @@ h2{font-size:clamp(28px,4.2vw,40px)}
 .qty-row{flex-wrap:wrap}
 .qty-row .btn.grow{flex:1 1 180px}
 html,body{overflow-x:clip}
+
+/* Promos */
+.promo-badge{position:absolute;top:8px;right:8px;background:var(--promo);color:var(--on-promo);font-family:var(--f-display);font-weight:800;font-size:17px;padding:2px 9px;border-radius:3px;transform:rotate(3deg);box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.promo-line{font-size:12px;font-weight:700;color:var(--promo)}
+.promo-kicker{display:inline-block;background:var(--promo);color:var(--on-promo);font-size:.55em;padding:3px 8px 2px;border-radius:3px;vertical-align:middle;margin-right:6px;letter-spacing:.06em;transform:rotate(-3deg)}
+.promos-sec .rail .card{border-color:color-mix(in srgb,var(--promo) 35%,var(--line))}
+.hero-facts .hf-promo{background:var(--promo-soft);border-color:transparent}
+.hero-facts .hf-promo a{color:var(--promo);text-decoration:none;font-weight:700}
+.hero-facts .hf-promo b{color:var(--promo)}
+.promo-box{display:flex;align-items:center;gap:12px;margin:0;background:var(--promo-soft);color:var(--ink);border-radius:12px;padding:10px 14px}
+.promo-box b{white-space:nowrap;font-family:var(--f-display);font-weight:800;font-size:28px;color:var(--promo);line-height:1}

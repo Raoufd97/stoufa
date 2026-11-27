@@ -35,6 +35,8 @@ const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u030
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 const slugify = s => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/, '') || 'piece';
 
+const TODAY_TN = new Date(Date.now() + 3600e3).toISOString().slice(0, 10); // date du jour en Tunisie (UTC+1)
+const finTxt = d => d ? 'jusqu\'au ' + new Date(d + 'T12:00:00Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' }) : '';
 const MOTO = { mobylette: 'Mobylette', peugeot: 'Peugeot', vespa: 'Vespa' };
 const items = raw.map(p => ({
   ...p,
@@ -42,6 +44,9 @@ const items = raw.map(p => ({
   modeles: (Array.isArray(p.modeles) ? p.modeles : []).filter(k => MOTO[k]),
   lies: Array.isArray(p.lies) ? p.lies : [],
   img: p.photo ? BLOB + encodeURIComponent(p.photo) : (p.photo_data || ''),
+  // Promo : seulement le pourcentage (aucun prix ne sort de l'appli) ; absente si la vue n'a pas encore les colonnes
+  promo: Number(p.promo_pct) > 0 && (!p.promo_fin || String(p.promo_fin) >= TODAY_TN) ? Math.round(Number(p.promo_pct)) : null,
+  promoFin: Number(p.promo_pct) > 0 && p.promo_fin ? String(p.promo_fin).slice(0, 10) : '',
 })).sort((a, b) => norm(a.nom).localeCompare(norm(b.nom)));
 
 // Slugs uniques et stables tant que le nom ne change pas
@@ -93,7 +98,7 @@ const pieceTitle = p => {
   return n.slice(0, 59).replace(/\s+\S*$/, '') + '…';
 };
 const cut = (s, n = 158) => s.length <= n ? s : s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…';
-const pieceDesc = p => cut(`${p.nom} ${pourTexte(p)} ${p.disponible ? 'disponible' : 'sur commande'} chez ${NOM}, Rue 14 Janvier, ${VILLE}. Pièces vélo et moto depuis ${DEPUIS}. Prix et réservation sur WhatsApp.`.replace(/\s+/g, ' '));
+const pieceDesc = p => cut(`${p.nom} ${pourTexte(p)}${p.promo ? ' en promo (−' + p.promo + ' %)' : ''} ${p.disponible ? 'disponible' : 'sur commande'} chez ${NOM}, Rue 14 Janvier, ${VILLE}. Pièces vélo et moto depuis ${DEPUIS}. Prix et réservation sur WhatsApp.`.replace(/\s+/g, ' '));
 
 /* ---------- Gabarits ---------- */
 const ICONS = {
@@ -114,10 +119,10 @@ const waHref = t => 'https://wa.me/' + WA + '?text=' + encodeURIComponent(t);
 
 function card(p, rel, opts = {}) {
   const href = `${rel}pieces/${p.slug}/`;
-  return `<article class="card" data-id="${esc(p.id)}" data-nom="${esc(p.nom)}" data-cat="${esc(p.categorie)}" data-mod="${esc(p.modeles.join(' '))}" data-dispo="${p.disponible ? 1 : 0}" data-s="${esc(norm(p.nom + ' ' + compat(p)))}">
+  return `<article class="card" data-id="${esc(p.id)}" data-nom="${esc(p.nom)}" data-cat="${esc(p.categorie)}" data-mod="${esc(p.modeles.join(' '))}" data-dispo="${p.disponible ? 1 : 0}" data-promo="${p.promo || ''}" data-s="${esc(norm(p.nom + ' ' + compat(p)))}">
   <a class="card-link" href="${href}">
-    <div class="card-img">${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.nom)}" loading="lazy" decoding="async" width="400" height="400">` : ICONS.bike}${opts.badge ? `<span class="rank">${esc(opts.badge)}</span>` : ''}</div>
-    <div class="card-body"><span class="compat">${esc(compat(p))}</span><h3>${esc(p.nom)}</h3></div>
+    <div class="card-img">${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.nom)}" loading="lazy" decoding="async" width="400" height="400">` : ICONS.bike}${opts.badge ? `<span class="rank">${esc(opts.badge)}</span>` : ''}${p.promo ? `<span class="promo-badge">−${p.promo} %</span>` : ''}</div>
+    <div class="card-body"><span class="compat">${esc(compat(p))}</span><h3>${esc(p.nom)}</h3>${p.promo ? `<span class="promo-line">Promo${p.promoFin ? ' ' + esc(finTxt(p.promoFin)) : ''}</span>` : ''}</div>
   </a>
   <div class="card-foot"><span class="dispo ${p.disponible ? 'ok' : 'cmd'}">${p.disponible ? 'Disponible' : 'Sur commande'}</span>
     <button class="add" type="button" data-add="${esc(p.id)}" aria-label="Ajouter ${esc(p.nom)} à ma demande">${ICONS.plus}</button></div>
@@ -205,6 +210,7 @@ ${body}
 
 /* ---------- Accueil ---------- */
 const dispoN = items.filter(p => p.disponible).length;
+const promos = items.filter(p => p.promo).sort((a, b) => (b.disponible - a.disponible) || (b.promo - a.promo));
 const top = items.filter(p => p.rang).sort((a, b) => a.rang - b.rang).slice(0, 8);
 const arrivages = items.filter(p => p.arrivage).sort((a, b) => String(b.arrivage).localeCompare(String(a.arrivage))).slice(0, 8);
 
@@ -228,7 +234,7 @@ const homeBody = `
         <a class="btn primary" href="#catalogue">Voir le catalogue ${ICONS.arrow}</a>
         ${WA ? `<a class="btn wa" href="${esc(waHref('Bonjour, je viens de votre site. Je cherche une pièce :'))}" target="_blank" rel="noopener">${ICONS.wa}WhatsApp</a>` : ''}
       </div>
-      <ul class="hero-facts"><li><b>${items.length}</b> pièces en ligne</li><li><b>${dispoN}</b> disponibles</li><li><b>${new Date().getFullYear() - Number(DEPUIS)}</b> ans d'atelier</li></ul>
+      <ul class="hero-facts">${promos.length ? `<li class="hf-promo"><a href="#promosT"><b>${promos.length}</b> en promo</a></li>` : ''}<li><b>${items.length}</b> pièces en ligne</li><li><b>${dispoN}</b> disponibles</li><li><b>${new Date().getFullYear() - Number(DEPUIS)}</b> ans d'atelier</li></ul>
     </div>
     <figure class="hero-img"><img src="assets/boutique-interieur.webp" alt="L'intérieur de l'atelier : roues de vélo et étagères de pièces" width="1000" height="750" fetchpriority="high"><figcaption class="tag">Atelier Mustapha Attia</figcaption></figure>
   </div>
@@ -241,6 +247,13 @@ const homeBody = `
   </div>
 </section>
 
+${promos.length ? `
+<section class="sec promos-sec" aria-labelledby="promosT">
+  <div class="wrap">
+    <div class="sec-h"><div><h2 id="promosT"><span class="promo-kicker">Promo</span> En promo en ce moment</h2><p class="muted">Réductions valables à la boutique. Demandez le prix sur WhatsApp.</p></div></div>
+    <div class="rail">${promos.map(p => card(p, '')).join('')}</div>
+  </div>
+</section>` : ''}
 ${rail('topT', 'Les plus demandées', 'Les pièces qui partent le plus en ce moment.', top, (p, i) => '#' + (i + 1))}
 ${rail('newT', 'Nouveaux arrivages', 'Dernières pièces arrivées à la boutique.', arrivages)}
 
@@ -253,6 +266,7 @@ ${rail('newT', 'Nouveaux arrivages', 'Dernières pièces arrivées à la boutiqu
         <button class="chip" type="button" data-f="tout" aria-pressed="true">Tout</button>
         ${CATS.map(c => `<button class="chip" type="button" data-f="${c.k}" aria-pressed="false">${esc(c.label)}</button>`).join('')}
         <button class="chip" type="button" data-f="dispo" aria-pressed="false">Disponible</button>
+        ${promos.length ? `<button class="chip" type="button" data-f="promo" aria-pressed="false">En promo (${promos.length})</button>` : ''}
       </div>
     </div>
     <p class="count muted" id="count" aria-live="polite">${items.length} pièces</p>
@@ -305,7 +319,7 @@ for (const c of CATS) {
   <nav class="crumbs" aria-label="Fil d'Ariane"><a href="${rel}">Accueil</a><span>›</span><span>Pièces ${esc(c.label)}</span></nav>
   <h1>${esc(c.h1)}</h1><p class="lead">${esc(c.intro)}</p>
   <div class="filters"><input id="q" type="search" placeholder="Chercher dans les pièces ${esc(c.label)}…" autocomplete="off" aria-label="Chercher une pièce">
-    <div class="chips" role="group" aria-label="Filtrer"><button class="chip" type="button" data-f="tout" aria-pressed="true">Toutes (${c.items.length})</button><button class="chip" type="button" data-f="dispo" aria-pressed="false">Disponibles</button></div></div>
+    <div class="chips" role="group" aria-label="Filtrer"><button class="chip" type="button" data-f="tout" aria-pressed="true">Toutes (${c.items.length})</button><button class="chip" type="button" data-f="dispo" aria-pressed="false">Disponibles</button>${c.items.some(p => p.promo) ? `<button class="chip" type="button" data-f="promo" aria-pressed="false">En promo (${c.items.filter(p => p.promo).length})</button>` : ''}</div></div>
   <p class="count muted" id="count" aria-live="polite">${c.items.length} pièces</p>
   <div class="grid" id="grid">${c.items.map(p => card(p, rel)).join('')}</div>
   <div class="empty" id="empty" hidden><p>Pas trouvé ? Demandez-nous directement.</p>${WA ? `<a class="btn wa" id="emptyWa" href="${esc(waHref('Bonjour, avez-vous cette pièce : '))}" target="_blank" rel="noopener">${ICONS.wa}Demander sur WhatsApp</a>` : ''}</div>
@@ -325,7 +339,7 @@ for (const p of items) {
     && (p.categorie !== 'moto' || !p.modeles.length || !x.modeles.length || x.modeles.some(m => p.modeles.includes(m))))
     .map(x => { const a = new Set(norm(p.nom).split(/\W+/).filter(w => w.length > 2)); return [x, norm(x.nom).split(/\W+/).filter(w => a.has(w)).length + (x.disponible ? .5 : 0)]; })
     .sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
-  const ask = `Bonjour, avez-vous « ${p.nom} » ? (vu sur votre site)`;
+  const ask = `Bonjour, avez-vous « ${p.nom} »${p.promo ? ' en promo à −' + p.promo + ' %' : ''} ? (vu sur votre site)`;
   write(`pieces/${p.slug}/index.html`, page({
     rel, path: `pieces/${p.slug}/`,
     title: pieceTitle(p), desc: pieceDesc(p), bodyClass: 'piece',
@@ -334,12 +348,13 @@ for (const p of items) {
     body: `<main>
 <section class="sec page-h"><div class="wrap">
   <nav class="crumbs" aria-label="Fil d'Ariane"><a href="${rel}">Accueil</a><span>›</span>${cat ? `<a href="${rel}categorie/${cat.k}/">Pièces ${esc(cat.label)}</a><span>›</span>` : ''}<span>${esc(p.nom)}</span></nav>
-  <div class="prod" data-id="${esc(p.id)}" data-nom="${esc(p.nom)}">
+  <div class="prod" data-id="${esc(p.id)}" data-nom="${esc(p.nom)}" data-promo="${p.promo || ''}">
     <figure class="prod-img">${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.nom)} ${esc(pourTexte(p))}" width="800" height="800" fetchpriority="high">` : ICONS.bike}</figure>
     <div class="prod-info">
       <span class="compat">${esc(compat(p))}</span>
       <h1>${esc(p.nom)}</h1>
       <p class="dispo big ${p.disponible ? 'ok' : 'cmd'}" data-dispo-badge>${p.disponible ? 'Disponible en boutique' : 'Sur commande'}</p>
+      ${p.promo ? `<p class="promo-box"><b>−${p.promo} %</b><span>En promo à la boutique${p.promoFin ? ' ' + esc(finTxt(p.promoFin)) : ''}.</span></p>` : ''}
       <p class="muted">${p.disponible ? 'En stock à la boutique de ' + esc(VILLE) + '.' : 'Plus en stock pour le moment : demandez-nous, on peut la recommander.'} Prix donné en boutique ou sur WhatsApp.</p>
       <div class="qty-row">
         <div class="step"><button type="button" data-step="-1" aria-label="Une de moins">−</button><input id="qty" inputmode="numeric" value="1" aria-label="Quantité"><button type="button" data-step="1" aria-label="Une de plus">+</button></div>
@@ -371,4 +386,4 @@ ${urls.map(u => `  <url><loc>${SITE}/${u}</loc><lastmod>${today}</lastmod></url>
 </urlset>
 `);
 
-console.log(`Vitrine générée : ${items.length} pièces, ${CATS.length} catégories, ${top.length} meilleures ventes, ${arrivages.length} arrivages, ${out.length} fichiers.`);
+console.log(`Vitrine générée : ${items.length} pièces, ${promos.length} en promo, ${CATS.length} catégories, ${top.length} meilleures ventes, ${arrivages.length} arrivages, ${out.length} fichiers.`);

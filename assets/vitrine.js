@@ -26,7 +26,7 @@
     const el = document.querySelector(`[data-id="${CSS.escape(id)}"]`);
     if (!el) return null;
     const img = el.querySelector('img');
-    return { id, nom: el.dataset.nom, img: img ? img.getAttribute('src') : '' };
+    return { id, nom: el.dataset.nom, img: img ? img.getAttribute('src') : '', promo: el.dataset.promo || '' };
   }
   function add(id, q) {
     const it = cart.find(x => x.id === id);
@@ -52,7 +52,7 @@
   function updSend() {
     const s = $('#cartSend'); if (!s) return;
     const nom = ($('#cartName') && $('#cartName').value.trim()) || '';
-    const lines = cart.map(x => `• ${x.q} × ${x.nom}`).join('\n');
+    const lines = cart.map(x => `• ${x.q} × ${x.nom}${x.promo ? ' (promo −' + x.promo + ' %)' : ''}`).join('\n');
     s.href = waHref(`Bonjour${nom ? ', c\'est ' + nom : ''}. Je souhaite réserver ces pièces (retrait en boutique) :\n${lines}\nMerci de me confirmer la disponibilité et le prix.`);
     s.setAttribute('aria-disabled', cart.length && V.wa ? 'false' : 'true');
   }
@@ -83,6 +83,7 @@
     const stem = w => w.length > 4 ? w.replace(/(es|s|x)$/, '') : w;
     const pass = c => {
       if (f === 'dispo') return c.dataset.dispo === '1';
+      if (f === 'promo') return !!c.dataset.promo;
       if (f === 'velo') return c.dataset.cat === 'velo';
       if (f !== 'tout') return c.dataset.cat === 'moto' && (!c.dataset.mod || c.dataset.mod.split(' ').includes(f));
       return true;
@@ -105,15 +106,22 @@
 
   /* ---------- Disponibilité en direct (la page est régénérée chaque nuit) ---------- */
   if (V.api && V.key) {
-    fetch(V.api + '/rest/v1/catalogue?select=id,disponible', { headers: { apikey: V.key } })
+    fetch(V.api + '/rest/v1/catalogue?select=*', { headers: { apikey: V.key } })
       .then(r => r.ok ? r.json() : [])
       .then(list => {
+        list = Array.isArray(list) ? list : [];
         const m = new Map(list.map(x => [x.id, x.disponible]));
         $$('.card[data-id]').forEach(c => {
           if (!m.has(c.dataset.id)) return;
           const d = m.get(c.dataset.id); c.dataset.dispo = d ? 1 : 0;
           const b = c.querySelector('.dispo'); if (b) { b.className = 'dispo ' + (d ? 'ok' : 'cmd'); b.textContent = d ? 'Disponible' : 'Sur commande'; }
         });
+        // Promo arrêtée depuis la dernière génération de la page : on retire le badge
+        if (list.length && 'promo_pct' in list[0]) {
+          const pr = new Map(list.map(x => [x.id, x.promo_pct]));
+          $$('[data-promo]').forEach(c => { if (!c.dataset.promo || !pr.has(c.dataset.id) || pr.get(c.dataset.id)) return;
+            c.dataset.promo = ''; c.querySelectorAll('.promo-badge,.promo-line').forEach(x => x.remove()); const pb = c.querySelector('.promo-box'); if (pb) pb.remove(); });
+        }
         const p = $('.prod[data-id]'), bb = $('[data-dispo-badge]');
         if (p && bb && m.has(p.dataset.id)) { const d = m.get(p.dataset.id); bb.className = 'dispo big ' + (d ? 'ok' : 'cmd'); bb.textContent = d ? 'Disponible en boutique' : 'Sur commande'; }
       }).catch(() => {});
